@@ -1,0 +1,84 @@
+ SPL QUERIES FOR SOC PROJECT - SPLUNK
+
+ Project: FUTURE_CS_02 - SOC Log Analysis
+
+
+1. List all events 
+index=main sourcetype="job sim"
+
+
+ 2. Extract fields using rex
+sourcetype="job sim"
+| rex "user=(?<user>\w+)\s+\|\s+ip=(?<ip>[\d\.]+)\s+\|\s+action=(?<action>[^|]+)(?:\s+\|\s+threat=(?<threat>.+))?"
+
+
+3. Show malware detection events in smart mode
+
+sourcetype="job sim" action="malware detected"
+
+4. Show failed login events
+
+sourcetype="job sim" action="login failed"
+
+5. Show file accessed events from public IPs
+
+sourcetype="job sim" action="file accessed"
+
+6. Count of successful logins by IP
+sourcetype="job sim"
+| rex "ip=(?<ip>[\d\.]+)" 
+| search "login success"
+| stats count by ip
+| sort -count
+
+
+7. Count of failed logins per user
+sourcetype="job sim"
+| rex "user=(?<user>\w+)" 
+| search "login failed"
+| stats count by user
+| sort -count
+
+
+8. Show all threat types with counts
+sourcetype="job sim"
+| rex "threat=(?<threat>.+)"
+| stats count by threat
+| sort -count
+
+
+# 9. Severity Categorization Logic
+sourcetype="soc_logs"
+| rex "user=(?<user>\w+)\s+\|\s+ip=(?<ip>[\d\.]+)\s+\|\s+action=(?<action>[^|]+)(?:\s+\|\s+threat=(?<threat>.+))?"
+| eval action=trim(action), threat=trim(threat), ip=trim(ip)
+| eval severity=case(
+    action="malware detected" AND like(threat, "%Rootkit%"), "High",
+    action="malware detected" AND like(threat, "%Ransomware%"), "High",
+    action="malware detected" AND like(threat, "%Worm%"), "High",
+    action="login failed", "Medium",
+    action="file accessed" AND (ip LIKE "198.%" OR ip LIKE "203.%"), "Medium",
+    1=1, "Low"
+)
+| table _time user ip action threat severity
+
+
+10. Stats of event counts by severity
+sourcetype="job sim"
+| rex "user=(?<user>\w+)\s+\|\s+ip=(?<ip>[\d\.]+)\s+\|\s+action=(?<action>[^|]+)(?:\s+\|\s+threat=(?<threat>.+))?"
+| eval action=trim(action), threat=trim(threat), ip=trim(ip)
+| eval severity=case(
+    action="malware detected" AND like(threat, "%Rootkit%"), "High",
+    action="malware detected" AND like(threat, "%Ransomware%"), "High",
+    action="malware detected" AND like(threat, "%Worm%"), "High",
+    action="login failed", "Medium",
+    action="file accessed" AND (ip LIKE "198.%" OR ip LIKE "203.%"), "Medium",
+    1=1, "Low"
+)
+| stats count by severity
+
+
+11. Table of all recent events with extracted fields
+sourcetype="job sim"
+| rex "user=(?<user>\w+)\s+\|\s+ip=(?<ip>[\d\.]+)\s+\|\s+action=(?<action>[^|]+)(?:\s+\|\s+threat=(?<threat>.+))?"
+| table _time user ip action threat
+| sort -_time
